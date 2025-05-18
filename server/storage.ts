@@ -69,7 +69,7 @@ export class DatabaseStorage implements IStorage {
     this.analysisResultId = 0;
     
     // Seed initial domains if needed
-    this.seedDomains().catch(err => console.error('Error seeding domains:', err));
+    this.seedDomains();
   }
   
   // Code samples
@@ -260,54 +260,67 @@ export class DatabaseStorage implements IStorage {
   
   // Seed initial domain data
   private async seedDomains() {
-    const count = await db.select({ count: sql<number>`count(*)` }).from(domains);
-    
-    if (count[0].count === 0) {
-      // No domains exist yet, let's seed some
-      const seedDomains = [
-        {
-          name: "Mathematics",
-          description: "Mathematical optimization techniques including algorithms, data structures, and computational methods.",
-          algorithms: [
-            "Dynamic Programming",
-            "Matrix Optimization",
-            "Numerical Methods",
-            "Algorithmic Complexity Reduction",
-            "Geometric Algorithms"
-          ] as any,
-          learningAccuracy: 92,
-          active: true
-        },
-        {
-          name: "Computer Science",
-          description: "Core computer science principles including algorithms, data structures, and computational methods.",
-          algorithms: [
-            "Caching",
-            "Memorization",
-            "Parallel Processing",
-            "Indexing",
-            "Efficient Data Structures"
-          ] as any,
-          learningAccuracy: 95,
-          active: true
-        },
-        {
-          name: "Physics",
-          description: "Physics-inspired optimization techniques and algorithms.",
-          algorithms: [
-            "Quantum Algorithms",
-            "N-body Optimization",
-            "Wave Function Collapse",
-            "Monte Carlo Methods",
-            "Simulated Annealing"
-          ] as any,
-          learningAccuracy: 84,
-          active: true
-        }
-      ];
+    try {
+      const count = await db.select({ count: sql<number>`count(*)` }).from(domains);
       
-      await db.insert(domains).values(seedDomains);
-      console.log('Seeded initial domain data');
+      if (count[0].count === 0) {
+        // No domains exist yet, let's seed some
+        const seedDomains = [
+          {
+            name: "Mathematics",
+            description: "Mathematical optimization techniques including algorithms, data structures, and computational methods.",
+            algorithms: JSON.stringify([
+              "Dynamic Programming",
+              "Matrix Optimization",
+              "Numerical Methods",
+              "Algorithmic Complexity Reduction",
+              "Geometric Algorithms",
+              "Cohomology",
+              "Sheaf Theory",
+              "Algebraic Varieties"
+            ]),
+            learningAccuracy: 92,
+            active: true
+          },
+          {
+            name: "Computer Science",
+            description: "Core computer science principles including algorithms, data structures, and computational methods.",
+            algorithms: JSON.stringify([
+              "Caching",
+              "Memorization",
+              "Parallel Processing",
+              "Indexing",
+              "Efficient Data Structures",
+              "Boolean Satisfiability",
+              "SAT Solving",
+              "Computational Complexity"
+            ]),
+            learningAccuracy: 95,
+            active: true
+          },
+          {
+            name: "Physics",
+            description: "Physics-inspired optimization techniques and algorithms.",
+            algorithms: JSON.stringify([
+              "Quantum Algorithms",
+              "N-body Optimization",
+              "Wave Function Collapse",
+              "Monte Carlo Methods",
+              "Simulated Annealing",
+              "Duality Principles",
+              "Projective Space",
+              "Homogenization"
+            ]),
+            learningAccuracy: 84,
+            active: true
+          }
+        ];
+        
+        await db.insert(domains).values(seedDomains);
+        console.log('Seeded initial domain data');
+      }
+    } catch (error) {
+      console.error('Error seeding domains:', error);
     }
   }
 }
