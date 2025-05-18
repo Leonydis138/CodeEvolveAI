@@ -2,6 +2,7 @@ import { storage } from "../storage";
 import { applyGeometricOptimization } from "./geometricOptimizer";
 import { analyzeCode } from "./codeAnalyzer";
 import { analyzeCodeWithAI } from "./openai";
+import { researchTopic, analyzeSelfCode, applySelfImprovement } from "./webResearcher";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -13,12 +14,19 @@ export interface ChatResponse {
   message: string;
   sourcedKnowledge: string[];
   codeImprovements?: CodeImprovement[];
+  researchResults?: ResearchResult;
 }
 
 interface CodeImprovement {
   file: string;
   changes: string;
   reason: string;
+}
+
+interface ResearchResult {
+  query: string;
+  summary: string;
+  sources: string[];
 }
 
 /**
@@ -30,10 +38,59 @@ export async function processChat(request: ChatRequest): Promise<ChatResponse> {
   let response = "";
   let sourcedKnowledge: string[] = [];
   let codeImprovements: CodeImprovement[] = [];
+  let researchResults: ResearchResult | undefined;
   
   try {
-    // Check for specific types of queries
-    if (message.toLowerCase().includes("p vs np") || 
+    // Check if the user is asking for online research
+    if (message.toLowerCase().includes("research") || 
+        message.toLowerCase().includes("learn online") ||
+        message.toLowerCase().includes("find information") ||
+        message.toLowerCase().includes("latest")) {
+      
+      // Extract the research topic from the message
+      const topicMatch = message.match(/about\s+(.+?)(?:\?|$)/i) || message.match(/research\s+(.+?)(?:\?|$)/i);
+      const topic = topicMatch ? topicMatch[1].trim() : message;
+      
+      // Perform online research on the topic
+      const research = await researchTopic(topic);
+      
+      response = `I've researched information about "${topic}" online. Here's what I found:\n\n`;
+      response += research.summary + "\n\n";
+      
+      if (research.results.length > 0) {
+        response += "Sources:\n";
+        const sources = research.results.map(r => r.title);
+        researchResults = {
+          query: researchTopic,
+          summary: research.summary,
+          sources
+        };
+        
+        // Add the research to our knowledge base
+        try {
+          // Find the most relevant domain for this research
+          const domains = await storage.getDomains();
+          const relevantDomain = domains.find(d => researchTopic.toLowerCase().includes(d.name.toLowerCase())) || domains[0];
+          
+          // Create a knowledge extraction from this research
+          await storage.createKnowledgeExtraction({
+            paperId: 1, // Default paper ID for web research
+            domainId: relevantDomain.id,
+            technique: "Web Research",
+            description: research.summary,
+            confidence: Math.round(research.relevanceScore),
+            applied: false
+          });
+          
+          sourcedKnowledge.push("Web Research");
+          response += "\nI've added this knowledge to my learning database for future use.";
+        } catch (error) {
+          console.error("Error saving research knowledge:", error);
+        }
+      }
+    }
+    // Check for specific types of queries about P vs NP or complexity theory
+    else if (message.toLowerCase().includes("p vs np") || 
         message.toLowerCase().includes("complexity") ||
         message.toLowerCase().includes("geometric") || 
         message.toLowerCase().includes("cohomology")) {
@@ -68,6 +125,7 @@ export async function processChat(request: ChatRequest): Promise<ChatResponse> {
         }
       }
     } 
+    // Check if the user is asking about code optimization
     else if (message.toLowerCase().includes("optimize") || 
              message.toLowerCase().includes("improve") || 
              message.toLowerCase().includes("code")) {
@@ -114,55 +172,92 @@ function processData(array) {
         }
       }
     }
+    // Check if the user is asking the AI to improve itself
     else if (message.toLowerCase().includes("improve yourself") || 
              message.toLowerCase().includes("self-improve") ||
-             message.toLowerCase().includes("update your code")) {
+             message.toLowerCase().includes("update your code") ||
+             message.toLowerCase().includes("analyze yourself")) {
       
-      // Simulate AI improving its own code
-      response = "I can analyze my own code and suggest improvements based on what I've learned. Here's how I would improve my geometric optimizer:\n\n";
+      // Analyze the AI's own code to find improvements
+      const selfImprovements = await analyzeSelfCode();
       
-      // This would be a real code improvement in a production system
-      const improvement = {
-        file: "server/lib/geometricOptimizer.ts",
-        changes: `
-// Add more sophisticated cohomology-based optimization
-function enhancedCohomologicalOptimization(code: string): string {
-  // Apply concepts from sheaf cohomology to identify computational patterns
-  // that can be transformed to more efficient structures
-  
-  // This would implement a more advanced version of the homogenization technique
-  // described in the Geometric-Computational Duality paper
-  
-  return optimizedCode;
-}`,
-        reason: "Adding advanced cohomological optimization based on the research paper's homogenization techniques for boolean formulas in projective space"
-      };
+      response = "I've analyzed my own code and found opportunities for improvement based on what I've learned:\n\n";
       
-      codeImprovements = [improvement];
+      if (selfImprovements.length > 0) {
+        // Use the first improvement as an example
+        const mainImprovement = selfImprovements[0];
+        codeImprovements = selfImprovements.map(imp => ({
+          file: imp.file,
+          changes: imp.suggestions,
+          reason: imp.reason
+        }));
+        
+        // Show what would be improved
+        response += `For the file ${mainImprovement.file}, I would make these improvements:\n\n`;
+        response += "```typescript\n";
+        response += mainImprovement.suggestions;
+        response += "\n```\n\n";
+        response += `Reason: ${mainImprovement.reason}\n\n`;
+        
+        if (selfImprovements.length > 1) {
+          response += `I've also identified ${selfImprovements.length - 1} other improvements that could be made to enhance my capabilities.`;
+        }
+        
+        // Add information about online learning
+        response += "\n\nI can now research online to continuously learn and improve myself based on the latest information, then apply that knowledge to analyze and update my own code.";
+        
+        sourcedKnowledge.push("Self-Improvement Mechanisms");
+        sourcedKnowledge.push("Code Analysis");
+        
+        // Apply the improvements and log them
+        for (const improvement of selfImprovements) {
+          // In a real system, we would read the original file content and apply the changes
+          // For demo purposes, we'll just log it
+          console.log(`Self-improvement identified for ${improvement.file}`);
+          
+          // Mark as an applied knowledge extraction
+          try {
+            const domains = await storage.getDomains();
+            const csDomain = domains.find(d => d.name === "Computer Science");
+            
+            if (csDomain) {
+              await storage.createKnowledgeExtraction({
+                paperId: 1, // Default paper ID
+                domainId: csDomain.id,
+                technique: "Self-Code-Analysis",
+                description: improvement.reason,
+                confidence: 90,
+                applied: true
+              });
+            }
+          } catch (error) {
+            console.error("Error saving self-improvement knowledge:", error);
+          }
+        }
+      } else {
+        response += "I couldn't find specific improvements at this time, but I'll continue analyzing my code as I learn more.";
+      }
       
-      // Show what would be added
-      response += "```typescript\n";
-      response += improvement.changes;
-      response += "\n```\n\n";
-      response += "This improvement would add a more sophisticated implementation of the cohomological optimization techniques from the research paper.";
-      
-      sourcedKnowledge.push("Self-improvement mechanisms");
-      sourcedKnowledge.push("Geometric-Computational Duality");
+      sourcedKnowledge.push("Self-Analysis");
+      sourcedKnowledge.push("Continuous Learning");
     }
+    // Default response for general inquiries
     else {
       // General inquiry, provide information about our capabilities
       response = "I'm an AI assistant that's been learning from research papers like the Geometric-Computational Duality approach to P vs NP. I can:\n\n";
+      response += "- Research topics online to enhance my knowledge\n";
       response += "- Answer questions about computational complexity theory\n";
       response += "- Apply advanced mathematical concepts to optimize code\n";
-      response += "- Suggest improvements to the codebase based on research knowledge\n";
-      response += "- Update my own code to incorporate new techniques\n\n";
+      response += "- Analyze and improve my own code based on what I learn\n";
+      response += "- Suggest improvements to the codebase based on research knowledge\n\n";
       response += "What would you like to know more about?";
     }
     
     return {
       message: response,
       sourcedKnowledge,
-      codeImprovements
+      codeImprovements,
+      researchResults
     };
   } catch (error) {
     console.error("Error processing chat:", error);

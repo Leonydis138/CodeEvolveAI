@@ -25,6 +25,11 @@ interface ChatResponse {
     changes: string;
     reason: string;
   }[];
+  researchResults?: {
+    query: string;
+    summary: string;
+    sources: string[];
+  };
 }
 
 export function ChatInterface() {
