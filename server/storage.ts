@@ -151,6 +151,10 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(knowledgeExtractions).where(eq(knowledgeExtractions.paperId, paperId));
   }
   
+  async getKnowledgeExtractionsForDomain(domainId: number): Promise<KnowledgeExtraction[]> {
+    return db.select().from(knowledgeExtractions).where(eq(knowledgeExtractions.domainId, domainId));
+  }
+  
   async createKnowledgeExtraction(extraction: InsertKnowledgeExtraction): Promise<KnowledgeExtraction> {
     const [newExtraction] = await db.insert(knowledgeExtractions).values(extraction).returning();
     return newExtraction;

@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { codeAnalysisRequestSchema, paperAnalysisRequestSchema } from "@shared/schema";
 import { analyzeCode } from "./lib/codeAnalyzer";
 import { analyzeCodeWithAI, analyzeResearchPaper } from "./lib/openai";
+import { applyGeometricOptimization, getGeometricKnowledge } from "./lib/geometricOptimizer";
+import { processChat, getAllKnowledge } from "./lib/chatEngine";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // API prefix
