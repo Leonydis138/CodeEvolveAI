@@ -419,6 +419,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch analysis result", error: error.message });
     }
   });
+  
+  // Chat API endpoint
+  app.post(`${apiPrefix}/chat`, async (req, res) => {
+    try {
+      const chatResponse = await processChat(req.body);
+      res.json(chatResponse);
+    } catch (error) {
+      console.error("Error processing chat:", error);
+      res.status(500).json({ message: "Failed to process chat message", error: (error as Error).message });
+    }
+  });
+  
+  // Knowledge base API endpoint
+  app.get(`${apiPrefix}/knowledge`, async (req, res) => {
+    try {
+      const knowledge = await getAllKnowledge();
+      res.json(knowledge);
+    } catch (error) {
+      console.error("Error getting knowledge base:", error);
+      res.status(500).json({ message: "Failed to get knowledge base", error: (error as Error).message });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

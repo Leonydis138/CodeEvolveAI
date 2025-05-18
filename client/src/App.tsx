@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
 import CodeAnalysis from "@/pages/code-analysis";
 import ResearchAnalysis from "@/pages/research-analysis";
+import AIChat from "@/pages/ai-chat";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/code-analysis" component={CodeAnalysis} />
       <Route path="/research-analysis" component={ResearchAnalysis} />
+      <Route path="/ai-chat" component={AIChat} />
       <Route component={NotFound} />
     </Switch>
   );
