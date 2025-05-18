@@ -48,13 +48,12 @@ export function ChatInterface() {
   }, [messages]);
 
   // API call for sending a message
-  const sendMessageMutation = useMutation({
+  const sendMessageMutation = useMutation<ChatResponse, Error, string>({
     mutationFn: async (message: string) => {
-      const response = await apiRequest<ChatResponse>("/api/chat", {
+      return apiRequest<ChatResponse>("/api/chat", {
         method: "POST",
         body: JSON.stringify({ message })
       });
-      return response;
     },
     onSuccess: (data) => {
       addMessage({
@@ -217,7 +216,7 @@ function KnowledgeBase() {
     const fetchKnowledge = async () => {
       try {
         setIsLoading(true);
-        const response = await apiRequest<any>("/api/knowledge", {
+        const response = await apiRequest<any[]>("/api/knowledge", {
           method: "GET"
         });
         setKnowledgeItems(response);

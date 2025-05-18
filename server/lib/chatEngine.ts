@@ -95,7 +95,7 @@ function processData(array) {
       // Apply geometric optimization techniques
       const optimizationResult = await applyGeometricOptimization(testCode, "javascript");
       
-      if (optimizationResult.performanceGain > 0) {
+      if (optimizationResult.improvements.performanceGain > 0) {
         response = `I can apply advanced optimization techniques from our research knowledge. For example:\n\n`;
         response += `Here's how I would optimize this recursive function:\n\n`;
         response += "```javascript\n";
