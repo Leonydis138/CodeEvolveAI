@@ -423,6 +423,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Chat API endpoint
   app.post(`${apiPrefix}/chat`, async (req, res) => {
     try {
+      // Make sure we have a valid message in the request
+      if (!req.body || !req.body.message) {
+        return res.status(400).json({ message: "Message is required" });
+      }
+      
       const chatResponse = await processChat(req.body);
       res.json(chatResponse);
     } catch (error) {
