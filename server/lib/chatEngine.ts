@@ -70,7 +70,8 @@ export async function processChat(request: ChatRequest): Promise<ChatResponse> {
         try {
           // Find the most relevant domain for this research
           const domains = await storage.getDomains();
-          const relevantDomain = domains.find(d => topic.toLowerCase().includes(d.name.toLowerCase())) || domains[0];
+          const topicStr = typeof topic === 'string' ? topic : '';
+          const relevantDomain = domains.find(d => topicStr.toLowerCase().includes(d.name.toLowerCase())) || domains[0];
           
           // Create a knowledge extraction from this research
           await storage.createKnowledgeExtraction({
