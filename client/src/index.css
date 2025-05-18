@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --primary: 250 85% 65%;
+  --primary-foreground: 211 100% 99%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 135 94% 39%;
+  --warning: 35 92% 65%;
+  --info: 190 95% 39%;
+  --ring: 240 4.9% 83.9%;
+  --sidebar-background: 240 11% 7%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-primary: 250 85% 65%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4% 15%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 240 4% 12%;
+  --sidebar-ring: 240 4.9% 83.9%;
+  --chart-1: 250 85% 65%;
+  --chart-2: 190 95% 39%;
+  --chart-3: 135 94% 39%;
+  --chart-4: 35 92% 65%;
+  --chart-5: 0 62.8% 30.6%;
+  --radius: 0.5rem;
+
+  /* Editor specific colors */
+  --editor-bg: hsl(240 11% 5%);
+  --editor-surface: hsl(240 11% 7%);
+  --editor-line: hsl(240 11% 15%);
+  --editor-text: hsl(0 0% 95%);
+}
+
+.light {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --primary: 250 85% 60%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 76% 36%;
+  --warning: 35 92% 65%;
+  --info: 217 91% 60%;
+  --ring: 240 10% 3.9%;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-editor-bg text-editor-text;
+  }
+  
+  ::-webkit-scrollbar {
+    @apply w-2 h-2 bg-transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+}
+
+@layer components {
+  .code-line-number {
+    @apply text-muted-foreground text-right pr-4 select-none;
+  }
+  
+  .optimization-highlight {
+    @apply bg-success bg-opacity-10 border-l-2 border-success;
+  }
+  
+  .security-highlight {
+    @apply bg-destructive bg-opacity-10 border-l-2 border-destructive;
+  }
+  
+  .domain-badge {
+    @apply rounded-full px-2 py-1 text-xs font-medium bg-primary bg-opacity-20 text-primary;
+  }
+  
+  .code-editor {
+    @apply font-mono leading-relaxed;
+    tab-size: 4;
+  }
+}
