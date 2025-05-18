@@ -1,16 +1,27 @@
+import { eq, desc, and, sql } from 'drizzle-orm';
+import { json } from 'drizzle-orm/pg-core';
+import { db } from './db';
 import {
-  CodeSample,
-  InsertCodeSample,
-  Optimization,
-  InsertOptimization,
-  Domain,
-  InsertDomain,
-  DashboardStats,
-  AnalysisResult
-} from "@shared/schema";
+  codeSamples,
+  optimizations,
+  domains,
+  researchPapers,
+  knowledgeExtractions,
+  type CodeSample,
+  type InsertCodeSample,
+  type Optimization,
+  type InsertOptimization,
+  type Domain,
+  type InsertDomain,
+  type ResearchPaper,
+  type InsertResearchPaper,
+  type KnowledgeExtraction,
+  type InsertKnowledgeExtraction,
+  type DashboardStats,
+  type AnalysisResult
+} from '@shared/schema';
 
-// modify the interface with any CRUD methods
-// you might need
+// Storage interface
 export interface IStorage {
   // Code samples
   getCodeSample(id: number): Promise<CodeSample | undefined>;
@@ -29,6 +40,17 @@ export interface IStorage {
   getDomains(): Promise<Domain[]>;
   createDomain(domain: InsertDomain): Promise<Domain>;
   
+  // Research papers
+  getResearchPaper(id: number): Promise<ResearchPaper | undefined>;
+  getResearchPapers(): Promise<ResearchPaper[]>;
+  createResearchPaper(paper: InsertResearchPaper): Promise<ResearchPaper>;
+  
+  // Knowledge extractions
+  getKnowledgeExtraction(id: number): Promise<KnowledgeExtraction | undefined>;
+  getKnowledgeExtractionsForPaper(paperId: number): Promise<KnowledgeExtraction[]>;
+  createKnowledgeExtraction(extraction: InsertKnowledgeExtraction): Promise<KnowledgeExtraction>;
+  markKnowledgeExtractionAsApplied(id: number): Promise<KnowledgeExtraction>;
+  
   // Dashboard data
   getDashboardStats(): Promise<DashboardStats>;
   
@@ -37,258 +59,257 @@ export interface IStorage {
   saveAnalysisResult(result: AnalysisResult): Promise<number>;
 }
 
-export class MemStorage implements IStorage {
-  private codeSamples: Map<number, CodeSample>;
-  private optimizations: Map<number, Optimization>;
-  private domains: Map<number, Domain>;
+export class DatabaseStorage implements IStorage {
+  // In-memory storage for analysis results which aren't persisted to the database
   private analysisResults: Map<number, AnalysisResult>;
-  private codeSampleId: number;
-  private optimizationId: number;
-  private domainId: number;
   private analysisResultId: number;
-
+  
   constructor() {
-    this.codeSamples = new Map();
-    this.optimizations = new Map();
-    this.domains = new Map();
-    this.analysisResults = new Map();
-    this.codeSampleId = 1;
-    this.optimizationId = 1;
-    this.domainId = 1;
-    this.analysisResultId = 1;
+    this.analysisResults = new Map<number, AnalysisResult>();
+    this.analysisResultId = 0;
     
-    // Seed some initial domain knowledge
-    this.seedDomains();
+    // Seed initial domains if needed
+    this.seedDomains().catch(err => console.error('Error seeding domains:', err));
   }
-
+  
   // Code samples
   async getCodeSample(id: number): Promise<CodeSample | undefined> {
-    return this.codeSamples.get(id);
+    const [sample] = await db.select().from(codeSamples).where(eq(codeSamples.id, id));
+    return sample;
   }
-
+  
   async getCodeSamples(): Promise<CodeSample[]> {
-    return Array.from(this.codeSamples.values());
+    return db.select().from(codeSamples).orderBy(desc(codeSamples.createdAt));
   }
-
+  
   async createCodeSample(sample: InsertCodeSample): Promise<CodeSample> {
-    const id = this.codeSampleId++;
-    const timestamp = new Date();
-    const newSample: CodeSample = { ...sample, id, createdAt: timestamp };
-    this.codeSamples.set(id, newSample);
+    const [newSample] = await db.insert(codeSamples).values(sample).returning();
     return newSample;
   }
-
+  
   // Optimizations
   async getOptimization(id: number): Promise<Optimization | undefined> {
-    return this.optimizations.get(id);
+    const [optimization] = await db.select().from(optimizations).where(eq(optimizations.id, id));
+    return optimization;
   }
-
+  
   async getOptimizationsForSample(sampleId: number): Promise<Optimization[]> {
-    return Array.from(this.optimizations.values()).filter(
-      (opt) => opt.sampleId === sampleId
-    );
+    return db.select().from(optimizations).where(eq(optimizations.sampleId, sampleId));
   }
-
+  
   async getRecentOptimizations(limit: number): Promise<Optimization[]> {
-    return Array.from(this.optimizations.values())
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .slice(0, limit);
+    return db.select().from(optimizations).orderBy(desc(optimizations.createdAt)).limit(limit);
   }
-
+  
   async createOptimization(optimization: InsertOptimization): Promise<Optimization> {
-    const id = this.optimizationId++;
-    const timestamp = new Date();
-    const newOptimization: Optimization = { ...optimization, id, createdAt: timestamp };
-    this.optimizations.set(id, newOptimization);
+    const [newOptimization] = await db.insert(optimizations).values(optimization).returning();
     return newOptimization;
   }
-
+  
   // Domains
   async getDomain(id: number): Promise<Domain | undefined> {
-    return this.domains.get(id);
+    const [domain] = await db.select().from(domains).where(eq(domains.id, id));
+    return domain;
   }
-
+  
   async getDomainByName(name: string): Promise<Domain | undefined> {
-    return Array.from(this.domains.values()).find(
-      (domain) => domain.name.toLowerCase() === name.toLowerCase()
-    );
+    const [domain] = await db.select().from(domains).where(eq(domains.name, name));
+    return domain;
   }
-
+  
   async getDomains(): Promise<Domain[]> {
-    return Array.from(this.domains.values());
+    return db.select().from(domains).where(eq(domains.active, true));
   }
-
+  
   async createDomain(domain: InsertDomain): Promise<Domain> {
-    const id = this.domainId++;
-    const timestamp = new Date();
-    const newDomain: Domain = { ...domain, id, createdAt: timestamp };
-    this.domains.set(id, newDomain);
+    const [newDomain] = await db.insert(domains).values(domain).returning();
     return newDomain;
   }
-
-  // Dashboard data
+  
+  // Research papers
+  async getResearchPaper(id: number): Promise<ResearchPaper | undefined> {
+    const [paper] = await db.select().from(researchPapers).where(eq(researchPapers.id, id));
+    return paper;
+  }
+  
+  async getResearchPapers(): Promise<ResearchPaper[]> {
+    return db.select().from(researchPapers).orderBy(desc(researchPapers.createdAt));
+  }
+  
+  async createResearchPaper(paper: InsertResearchPaper): Promise<ResearchPaper> {
+    const [newPaper] = await db.insert(researchPapers).values(paper).returning();
+    return newPaper;
+  }
+  
+  // Knowledge extractions
+  async getKnowledgeExtraction(id: number): Promise<KnowledgeExtraction | undefined> {
+    const [extraction] = await db.select().from(knowledgeExtractions).where(eq(knowledgeExtractions.id, id));
+    return extraction;
+  }
+  
+  async getKnowledgeExtractionsForPaper(paperId: number): Promise<KnowledgeExtraction[]> {
+    return db.select().from(knowledgeExtractions).where(eq(knowledgeExtractions.paperId, paperId));
+  }
+  
+  async createKnowledgeExtraction(extraction: InsertKnowledgeExtraction): Promise<KnowledgeExtraction> {
+    const [newExtraction] = await db.insert(knowledgeExtractions).values(extraction).returning();
+    return newExtraction;
+  }
+  
+  async markKnowledgeExtractionAsApplied(id: number): Promise<KnowledgeExtraction> {
+    const [updatedExtraction] = await db
+      .update(knowledgeExtractions)
+      .set({ applied: true })
+      .where(eq(knowledgeExtractions.id, id))
+      .returning();
+    return updatedExtraction;
+  }
+  
+  // Dashboard stats
   async getDashboardStats(): Promise<DashboardStats> {
-    const recentOptimizations = await this.getRecentOptimizations(5);
-    const domains = await this.getDomains();
+    // Get average performance scores
+    const performanceResult = await db
+      .select({ avg: sql<number>`AVG((${optimizations.improvements}->>'performanceScore')::int)` })
+      .from(optimizations);
     
-    const recentOptsList = recentOptimizations.map(opt => {
-      // Find the sample for this optimization
-      const sample = this.codeSamples.get(opt.sampleId);
-      // Find the domain
-      const domain = opt.domainKnowledge ? 
-        domains.find(d => d.name === opt.domainKnowledge) : 
-        undefined;
+    const securityResult = await db
+      .select({ avg: sql<number>`AVG((${optimizations.improvements}->>'securityScore')::int)` })
+      .from(optimizations);
       
-      // Extract improvement data from improvements JSON
+    const readabilityResult = await db
+      .select({ avg: sql<number>`AVG((${optimizations.improvements}->>'readabilityScore')::int)` })
+      .from(optimizations);
+      
+    // Get recent optimizations
+    const recentOpts = await db.select({
+      id: optimizations.id,
+      sampleId: optimizations.sampleId,
+      type: optimizations.type,
+      createdAt: optimizations.createdAt,
+      improvements: optimizations.improvements,
+      domainKnowledge: optimizations.domainKnowledge
+    })
+    .from(optimizations)
+    .orderBy(desc(optimizations.createdAt))
+    .limit(5);
+    
+    // Get domain info
+    const domainsData = await db.select().from(domains).where(eq(domains.active, true));
+    
+    // Format recent optimizations
+    const recentOptimizations = await Promise.all(recentOpts.map(async (opt) => {
+      const [sample] = await db
+        .select({ filename: codeSamples.filename })
+        .from(codeSamples)
+        .where(eq(codeSamples.id, opt.sampleId));
+        
       const improvements = opt.improvements as any;
-      let improvementText = "Optimized";
-      
-      if (opt.type === "performance") {
-        improvementText = improvements.speedup ? 
-          `${improvements.speedup}x faster` : 
-          `${improvements.percentage || 0}% faster`;
-      } else if (opt.type === "security") {
-        improvementText = improvements.vulnerabilities ? 
-          `${improvements.vulnerabilities} vulnerabilities fixed` : 
-          "Security improved";
-      } else if (opt.type === "readability") {
-        improvementText = improvements.readabilityChange ? 
-          `${improvements.readabilityChange}` : 
-          "Better readability";
-      }
       
       return {
         id: opt.id,
-        filename: sample?.filename || "Unknown file",
+        filename: sample?.filename || 'Unknown',
         type: opt.type,
         date: opt.createdAt.toISOString(),
-        improvement: improvementText,
-        domain: opt.domainKnowledge || "General"
+        improvement: `${improvements.improvementPercentage || 0}%`,
+        domain: opt.domainKnowledge || 'General'
       };
-    });
+    }));
     
-    // Calculate average scores from all optimizations
-    let totalPerformance = 0;
-    let totalSecurity = 0;
-    let totalReadability = 0;
-    let countPerformance = 0;
-    let countSecurity = 0;
-    let countReadability = 0;
-    
-    for (const opt of this.optimizations.values()) {
-      const improvements = opt.improvements as any;
-      
-      if (opt.type === "performance" && improvements.score) {
-        totalPerformance += improvements.score;
-        countPerformance++;
-      } else if (opt.type === "security" && improvements.score) {
-        totalSecurity += improvements.score;
-        countSecurity++;
-      } else if (opt.type === "readability" && improvements.score) {
-        totalReadability += improvements.score;
-        countReadability++;
-      }
-    }
-    
-    const performanceScore = countPerformance > 0 ? 
-      Math.round(totalPerformance / countPerformance) : 87;
-    
-    const securityScore = countSecurity > 0 ? 
-      Math.round(totalSecurity / countSecurity) : 92;
-    
-    const readabilityScore = countReadability > 0 ? 
-      Math.round(totalReadability / countReadability) : 78;
-    
-    // Format domain data
-    const domainData = domains.map(domain => {
-      // Count optimizations that used this domain
-      const relatedOptimizations = Array.from(this.optimizations.values())
-        .filter(opt => opt.domainKnowledge === domain.name);
-      
-      // Extract recent applications from the algorithms field
-      const algorithms = domain.algorithms as string[];
-      const recentApplications = algorithms.slice(0, 2).map(algo => {
-        const [technique, description] = algo.split(':');
-        return {
-          technique,
-          description: description || `Applied ${technique} to optimize code`
-        };
-      });
+    // Format domains
+    const formattedDomains = await Promise.all(domainsData.map(async (domain) => {
+      // Get knowledge extractions for this domain that have been applied
+      const appliedExtractions = await db
+        .select()
+        .from(knowledgeExtractions)
+        .where(and(
+          eq(knowledgeExtractions.domainId, domain.id),
+          eq(knowledgeExtractions.applied, true)
+        ))
+        .limit(3);
       
       return {
         name: domain.name,
-        algorithmsApplied: relatedOptimizations.length,
-        recentApplications,
+        algorithmsApplied: (domain.algorithms as string[]).length,
+        recentApplications: appliedExtractions.map(ext => ({
+          technique: ext.technique,
+          description: ext.description
+        })),
         learningAccuracy: domain.learningAccuracy
       };
-    });
+    }));
     
     return {
-      performanceScore,
-      securityScore,
-      readabilityScore,
-      recentOptimizations: recentOptsList,
-      domains: domainData
+      performanceScore: Math.round(performanceResult[0]?.avg || 85),
+      securityScore: Math.round(securityResult[0]?.avg || 92),
+      readabilityScore: Math.round(readabilityResult[0]?.avg || 78),
+      recentOptimizations,
+      domains: formattedDomains
     };
   }
   
-  // Analysis results
+  // Analysis results (using in-memory storage for now)
   async getAnalysisResult(id: number): Promise<AnalysisResult | undefined> {
     return this.analysisResults.get(id);
   }
   
   async saveAnalysisResult(result: AnalysisResult): Promise<number> {
-    const id = this.analysisResultId++;
-    this.analysisResults.set(id, result);
-    return id;
+    this.analysisResultId++;
+    this.analysisResults.set(this.analysisResultId, result);
+    return this.analysisResultId;
   }
-
-  // Seed domains
-  private seedDomains() {
-    // Mathematics domain
-    this.createDomain({
-      name: "Mathematics",
-      description: "Mathematical optimization techniques and algorithms",
-      active: true,
-      algorithms: [
-        "Dynamic Programming:Optimized recursive calculations using memoization",
-        "Euclidean Algorithm:Efficient greatest common divisor calculations",
-        "Fast Fourier Transform:Optimized signal processing computations",
-        "Matrix Multiplication:Improved matrix operation efficiency"
-      ],
-      learningAccuracy: 94
-    });
+  
+  // Seed initial domain data
+  private async seedDomains() {
+    const count = await db.select({ count: sql<number>`count(*)` }).from(domains);
     
-    // Physics domain
-    this.createDomain({
-      name: "Physics",
-      description: "Physics simulation and calculation optimizations",
-      active: true,
-      algorithms: [
-        "Barnes-Hut Algorithm:Optimized N-body simulation for better performance",
-        "Verlet Integration:Enhanced fluid dynamics calculation performance",
-        "Fast Multipole Method:Improved electromagnetic field calculations",
-        "Monte Carlo Simulation:Enhanced statistical physics models"
-      ],
-      learningAccuracy: 89
-    });
-    
-    // Computer Science domain
-    this.createDomain({
-      name: "Computer Science",
-      description: "Core computer science algorithms and optimizations",
-      active: true,
-      algorithms: [
-        "Red-Black Trees:Optimized self-balancing binary search trees",
-        "A* Pathfinding:Enhanced graph traversal with heuristics",
-        "Bloom Filters:Efficient probabilistic data structure for membership testing",
-        "B-tree Indexing:Improved database query performance"
-      ],
-      learningAccuracy: 96
-    });
+    if (count[0].count === 0) {
+      // No domains exist yet, let's seed some
+      const seedDomains = [
+        {
+          name: "Mathematics",
+          description: "Mathematical optimization techniques including algorithms, data structures, and computational methods.",
+          algorithms: [
+            "Dynamic Programming",
+            "Matrix Optimization",
+            "Numerical Methods",
+            "Algorithmic Complexity Reduction",
+            "Geometric Algorithms"
+          ] as any,
+          learningAccuracy: 92,
+          active: true
+        },
+        {
+          name: "Computer Science",
+          description: "Core computer science principles including algorithms, data structures, and computational methods.",
+          algorithms: [
+            "Caching",
+            "Memorization",
+            "Parallel Processing",
+            "Indexing",
+            "Efficient Data Structures"
+          ] as any,
+          learningAccuracy: 95,
+          active: true
+        },
+        {
+          name: "Physics",
+          description: "Physics-inspired optimization techniques and algorithms.",
+          algorithms: [
+            "Quantum Algorithms",
+            "N-body Optimization",
+            "Wave Function Collapse",
+            "Monte Carlo Methods",
+            "Simulated Annealing"
+          ] as any,
+          learningAccuracy: 84,
+          active: true
+        }
+      ];
+      
+      await db.insert(domains).values(seedDomains);
+      console.log('Seeded initial domain data');
+    }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

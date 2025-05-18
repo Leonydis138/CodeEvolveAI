@@ -35,7 +35,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       );
       
-      res.json(result);
+      // Save the research paper to the database
+      const paper = await storage.createResearchPaper({
+        title: analysisRequest.title,
+        content: analysisRequest.content,
+        summary: result.summary,
+        keyConcepts: result.key_concepts as any,
+        rigorEvaluation: result.rigor_evaluation,
+        connections: result.connections as any,
+        recommendation: result.recommendation
+      });
+      
+      // Try to extract knowledge from the analysis and connect to domains
+      try {
+        // Get all domains
+        const domains = await storage.getDomains();
+        
+        // For each domain, check if it's mentioned in the paper
+        for (const domain of domains) {
+          let foundRelevantKnowledge = false;
+          
+          // If domain name appears in summary or connections
+          if (
+            (result.summary && result.summary.toLowerCase().includes(domain.name.toLowerCase())) ||
+            (result.connections && result.connections.some(c => 
+              c.toLowerCase().includes(domain.name.toLowerCase())
+            ))
+          ) {
+            foundRelevantKnowledge = true;
+            
+            // Extract relevant connections for this domain
+            const relevantConnections = result.connections?.filter(c => 
+              c.toLowerCase().includes(domain.name.toLowerCase())
+            ) || [];
+            
+            // Create a knowledge extraction
+            await storage.createKnowledgeExtraction({
+              paperId: paper.id,
+              domainId: domain.id,
+              technique: "Cross-domain connection",
+              description: relevantConnections.length > 0 
+                ? relevantConnections[0] 
+                : `Knowledge related to ${domain.name} found in research paper`,
+              confidence: 85, // Medium-high confidence
+              applied: false // Not yet applied
+            });
+          }
+          
+          // Look for domain-specific algorithms in the key concepts
+          if (result.key_concepts) {
+            for (const concept of result.key_concepts) {
+              const domainAlgorithms = domain.algorithms as string[];
+              
+              if (domainAlgorithms.some(algo => 
+                concept.toLowerCase().includes(algo.toLowerCase())
+              )) {
+                foundRelevantKnowledge = true;
+                
+                // Create a knowledge extraction
+                await storage.createKnowledgeExtraction({
+                  paperId: paper.id,
+                  domainId: domain.id,
+                  technique: concept,
+                  description: `Algorithm or technique related to ${domain.name} found in key concepts`,
+                  confidence: 90, // High confidence
+                  applied: false // Not yet applied
+                });
+                
+                break; // Only create one extraction per domain for algorithms
+              }
+            }
+          }
+          
+          // If no specific knowledge was found but the domain is mentioned
+          if (!foundRelevantKnowledge && 
+              (analysisRequest.content.toLowerCase().includes(domain.name.toLowerCase()) ||
+               analysisRequest.title.toLowerCase().includes(domain.name.toLowerCase()))) {
+            
+            // Create a general knowledge extraction
+            await storage.createKnowledgeExtraction({
+              paperId: paper.id,
+              domainId: domain.id,
+              technique: "General reference",
+              description: `Paper mentions ${domain.name} but no specific techniques identified`,
+              confidence: 65, // Medium confidence
+              applied: false // Not yet applied
+            });
+          }
+        }
+      } catch (extractionError: any) {
+        console.warn("Knowledge extraction failed, but paper analysis was saved:", extractionError.message);
+      }
+      
+      // Return both the analysis result and the stored paper ID
+      res.json({
+        ...result,
+        paperId: paper.id
+      });
     } catch (error: any) {
       res.status(500).json({ 
         message: "Failed to analyze research paper", 
@@ -160,6 +256,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(newDomain);
     } catch (error) {
       res.status(500).json({ message: "Failed to create domain", error: error.message });
+    }
+  });
+  
+  // Get all research papers
+  app.get(`${apiPrefix}/papers`, async (req, res) => {
+    try {
+      const papers = await storage.getResearchPapers();
+      res.json(papers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch research papers", error: error.message });
+    }
+  });
+  
+  // Get a specific research paper by ID
+  app.get(`${apiPrefix}/papers/:id`, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+      
+      const paper = await storage.getResearchPaper(id);
+      if (!paper) {
+        return res.status(404).json({ message: "Research paper not found" });
+      }
+      
+      res.json(paper);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch research paper", error: error.message });
+    }
+  });
+  
+  // Get knowledge extractions for a paper
+  app.get(`${apiPrefix}/papers/:id/extractions`, async (req, res) => {
+    try {
+      const paperId = parseInt(req.params.id);
+      if (isNaN(paperId)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+      
+      const paper = await storage.getResearchPaper(paperId);
+      if (!paper) {
+        return res.status(404).json({ message: "Research paper not found" });
+      }
+      
+      const extractions = await storage.getKnowledgeExtractionsForPaper(paperId);
+      res.json(extractions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch knowledge extractions", error: error.message });
+    }
+  });
+  
+  // Mark knowledge extraction as applied
+  app.put(`${apiPrefix}/extractions/:id/apply`, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+      
+      const updatedExtraction = await storage.markKnowledgeExtractionAsApplied(id);
+      if (!updatedExtraction) {
+        return res.status(404).json({ message: "Knowledge extraction not found" });
+      }
+      
+      res.json(updatedExtraction);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to apply knowledge extraction", error: error.message });
     }
   });
   
